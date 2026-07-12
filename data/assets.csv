@@ -1,0 +1,9 @@
+Asset_ID,Hostname,Vendor,Product,Version,CPE_String
+AST-001,SRV-AD-01,microsoft,windows_server,2019,cpe:2.3:o:microsoft:windows_server:2019:*:*:*:*:*:*:*
+AST-002,Mail-Exchange,microsoft,exchange_server,2019,cpe:2.3:a:microsoft:exchange_server:2019:*:*:*:*:*:*:*
+AST-003,FW-Core-01,fortinet,fortios,7.2.4,cpe:2.3:o:fortinet:fortios:7.2.4:*:*:*:*:*:*:*
+AST-008,N8N-Orchestrator,n8n,n8n,*,cpe:2.3:a:n8n:n8n:*:*:*:*:*:node.js:*:*
+AST-009,Backup-Storage,dell,data_domain_operating_system,*,cpe:2.3:o:dell:data_domain_operating_system:*:*:*:*:*:*:*:*
+AST-010,Client-PC-01,foxit,pdf_editor,*,cpe:2.3:a:foxit:pdf_editor:*:*:*:*:*:*:*:*
+AST-011,Dev-Env,coder,coder,*,cpe:2.3:a:coder:coder:*:*:*:*:*:go:*:*
+AST-012,Win-Workstation,microsoft,windows,-,cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*

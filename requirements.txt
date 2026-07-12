@@ -2,3 +2,4 @@ requests
 pandas
 python-dotenv
 schedule
+psycopg2-binary

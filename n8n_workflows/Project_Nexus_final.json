@@ -1,0 +1,387 @@
+{
+  "name": "Project_Nexus",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1f24af5a-323b-495d-aca7-f066bccf7d91",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://example.com//run-pipeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a4dbf079-9194-45ec-b830-82073127db8a",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cve_id, base_score, severity, description, affected_assets \nFROM daily_cves \nWHERE is_matched = TRUE \nAND discovered_at >= NOW() - INTERVAL '7 days';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        0
+      ],
+      "id": "1b0e06f7-e09a-4660-9e87-3444c4a87572",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "aRY146SELWnwvTmY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c3071feb-8170-4288-b453-ff0df6dd04d6",
+              "leftValue": "={{ $json.cve_id }}",
+              "rightValue": "null",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "0abbefad-fffa-4aa5-89af-2bb6d43ea2d4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "errorMessage": "No match found for today."
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -160
+      ],
+      "id": "2ecafa31-c81f-43ab-9e36-050292797674",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "cve_list",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        16
+      ],
+      "id": "ddd8bff9-e3f7-40d9-ab58-94f7753c7323",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=CVE: {{ $json.cve_id }}\nSeverity: {{ $json.severity }}\nAssets: {{ JSON.stringify($json.affected_assets) }}\nDescription: {{ $json.description }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert Iranian Cyber Threat Intelligence analyst.  Your task is to analyze a single vulnerability, translate its description into professional Persian, and suggest 3 short bullet points for mitigation in Persian.  Keep technical terms like SQL Injection, RCE, IP, and CVE in English. Do not write any LaTeX. Output strictly in valid JSON format.  JSON Output Format: {   \"persian_summary\": \"شرح آسیب‌پذیری به زبان فارسی...\",   \"mitigation_1\": \"اقدام پیشنهادی اول...\",   \"mitigation_2\": \"اقدام پیشنهادی دوم...\",   \"mitigation_3\": \"اقدام پیشنهادی سوم...\" }"
+            }
+          ]
+        },
+        "batching": {
+          "batchSize": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        848,
+        16
+      ],
+      "id": "50029953-677e-47a7-b1c5-c88a4852271b",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-oss-20b",
+          "mode": "list",
+          "cachedResultName": "gpt-oss-20b"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        848,
+        208
+      ],
+      "id": "8751f8c9-88e8-40aa-a721-205814a192c1",
+      "name": "Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "FrzFG7AWcVoZj8bD",
+          "name": "GPT-OSS-20B-Remote"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- SANITIZER FUNCTION ---\n// این تابع از کرش کردن لاتکس در برابر کاراکترهای ویژه جلوگیری می‌کند\nfunction escapeLatex(str) {\n    if (!str) return \"\";\n    return String(str)\n        .replace(/\\\\/g, '\\\\textbackslash ')\n        .replace(/_/g, '\\\\_')\n        .replace(/&/g, '\\\\&')\n        .replace(/%/g, '\\\\%')\n        .replace(/\\$/g, '\\\\$')\n        .replace(/#/g, '\\\\#')\n        .replace(/\\{/g, '\\\\{')\n        .replace(/\\}/g, '\\\\}');\n}\n\n// --- TYPOGRAPHY RULES FUNCTION ---\n// این تابع قوانین سخت‌گیرانه حروف‌چینی فارسی/انگلیسی را اعمال می‌کند\nfunction applyPersianRules(str) {\n    if (!str) return \"\";\n    \n    // قانون ۱: مدیریت اعداد و عبارات اعشاری (محصور کردن در \\lr)\n    // این Regex اعداد ورژن‌ها مثل 7.7.1.0 یا 2.x را پیدا کرده و درون \\lr{} قرار می‌دهد.\n    str = str.replace(/\\b(\\d+\\.[a-zA-Z0-9.]+)\\b/g, '\\\\lr{$1}');\n    \n    // قانون ۲: حذف پرانتز از دور عبارات انگلیسی چندکلمه‌ای\n    // مثال: (SQL Injection) ->  SQL Injection \n    // اما عبارات تک کلمه‌ای مثل (CVE-123) دست‌نخورده باقی می‌مانند\n    str = str.replace(/\\(\\s*([a-zA-Z0-9\\-_]+(?:\\s+[a-zA-Z0-9\\-_]+)+)\\s*\\)/g, ' $1 ');\n    \n    // قانون ۳: ایجاد فاصله خالی قبل از دو نقطه (Colon) برای عبارات انگلیسی\n    str = str.replace(/([a-zA-Z0-9])\\s*:/g, '$1 :');\n    \n    return str;\n}\n\nconst ai_results = $input.item.json.cve_list;\nconst original_cves = $('Execute a SQL query').all();\nlet total_cves = original_cves.length;\n\n// ساخت هدر بر اساس قالب دقیق درخواست شده با فونت‌های لوکال\nlet latex = `\\\\documentclass[aspectratio=169,12pt]{beamer}\n\\\\usetheme{Madrid}\n\\\\usecolortheme{default}\n\\\\setbeamertemplate{navigation symbols}{}\n\n\\\\usepackage{microtype}\n\\\\usepackage{booktabs}\n\\\\usepackage{array}\n\\\\usepackage{xcolor}\n\\\\usepackage{xepersian}\n\n% ------ Preamble: Font settings based on exactly available local .ttf files ------\n\\\\settextfont\n[Extension = .ttf,\nUprightFont = Vazirmatn-FD-Regular,\nBoldFont = Vazirmatn-FD-Bold]\n{Vazirmatn-FD}\n\n\\\\setdigitfont[Extension=.ttf]{Vazirmatn-FD-Regular}\n\n% تنظیم فونت Sans الزامی برای قالب‌های Beamer\n\\\\setsansfont\n[Extension = .ttf,\nUprightFont = Vazirmatn-FD-Regular,\nBoldFont = Vazirmatn-FD-Bold]\n{Vazirmatn-FD}\n\n\\\\definecolor{DarkBlue}{RGB}{25,55,109}\n\\\\setbeamercolor{title}{fg=DarkBlue}\n\\\\setbeamercolor{frametitle}{fg=white,bg=DarkBlue}\n\n\\\\title{گزارش آسیب‌پذیری‌های اختصاصی سازمان}\n\\\\subtitle{تطبیق داده شده با دارایی‌های داخلی}\n\\\\author{واحد امنیت اطلاعات}\n\\\\date{\\\\today}\n\n\\\\begin{document}\n\\\\begin{frame}\n  \\\\titlepage\n\\\\end{frame}\n\n\\\\begin{frame}{خلاصه مدیریتی}\n  \\\\begin{itemize}\n    \\\\item در پایش اخیر، تعداد \\\\lr{${total_cves}} آسیب‌پذیری بحرانی و مهم مرتبط با دارایی‌های سازمان شناسایی شد.\n    \\\\item این گزارش نیازمند اقدام فوری توسط تیم‌های زیرساخت و شبکه می‌باشد.\n  \\\\end{itemize}\n  \\\\vspace{0.5cm}\n  \\\\begin{center}\n    \\\\begin{tabular}{cc}\n      \\\\toprule\n      شاخص & مقدار \\\\\\\\\n      \\\\midrule\n      تعداد کل آسیب‌پذیری‌های منطبق & \\\\lr{${total_cves}} \\\\\\\\\n      \\\\bottomrule\n    \\\\end{tabular}\n  \\\\end{center}\n\\\\end{frame}\n`;\n\noriginal_cves.forEach((orig_item, index) => {\n    let db_data = orig_item.json;\n    let cve_id = escapeLatex(db_data.cve_id || \"Unknown\");\n    let score = escapeLatex(db_data.base_score || \"N/A\");\n    let severity = escapeLatex(db_data.severity || \"HIGH\");\n    \n    let ai_text = ai_results[index].text || \"{}\";\n    ai_text = ai_text.replace(/```json/gi, '').replace(/```/g, '').trim();\n    \n    let ai_data = { persian_summary: \"خطا در ترجمه\", mitigation_1: \"-\", mitigation_2: \"-\", mitigation_3: \"-\" };\n    try {\n        ai_data = JSON.parse(ai_text);\n    } catch(e) {}\n\n    // اعمال قوانین حروف‌چینی روی خروجی‌های هوش مصنوعی\n    let summary = applyPersianRules(escapeLatex(ai_data.persian_summary));\n    let mit1 = applyPersianRules(escapeLatex(ai_data.mitigation_1));\n    let mit2 = applyPersianRules(escapeLatex(ai_data.mitigation_2));\n    let mit3 = applyPersianRules(escapeLatex(ai_data.mitigation_3));\n\n    // استخراج دارایی‌ها با رعایت قانون دوم (عدم استفاده از پرانتز برای کلمات انگلیسی)\n    let assets = \"نامشخص\";\n    if (db_data.affected_assets && db_data.affected_assets.length > 0) {\n        let parsed_assets = typeof db_data.affected_assets === 'string' ? JSON.parse(db_data.affected_assets) : db_data.affected_assets;\n        // بجای پرانتز از خط تیره برای جداسازی محصول و هاست استفاده شده است\n        assets = parsed_assets.map(a => `\\\\lr{${escapeLatex(a.Hostname)}} - \\\\lr{${escapeLatex(a.Product)}}`).join(\" ، \");\n    }\n\n    latex += `\n\\\\begin{frame}{آسیب‌پذیری \\\\lr{${index + 1}}}\n  {\\\\Large\\\\textbf{\\\\lr{${cve_id}}}}\n  \\\\vspace{0.4cm}\n  \\\\begin{itemize}\n    \\\\item شدت : ${severity}\n    \\\\item امتیاز CVSS : \\\\lr{${score}}\n    \\\\item دارایی‌های تحت تأثیر : ${assets}\n  \\\\end{itemize}\n  \\\\vspace{0.3cm}\n  \\\\textbf{شرح آسیب‌پذیری}\n  \n  ${summary}\n\\\\end{frame}\n\n\\\\begin{frame}{اقدامات پیشنهادی و کاهش ریسک}\n  \\\\textbf{\\\\lr{${cve_id}}}\n  \\\\vspace{0.4cm}\n  \\\\begin{block}{اقدامات پیشنهادی}\n    \\\\begin{itemize}\n      \\\\item ${mit1}\n      \\\\item ${mit2}\n      \\\\item ${mit3}\n    \\\\end{itemize}\n  \\\\end{block}\n\\\\end{frame}\n`;\n});\n\nlatex += `\n\\\\begin{frame}{پایان گزارش}\n  \\\\vfill\n  \\\\begin{center}\n    \\\\Large\n    \\\\textcolor{DarkBlue}{\\\\textbf{پایان گزارش - لطفا جهت رفع موارد اقدام نمایید.}}\n  \\\\end{center}\n\\\\end{frame}\n\\\\end{document}\n`;\n\nreturn [{ json: { final_latex: latex } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        16
+      ],
+      "id": "04051559-1f9a-4dfd-87a0-2df39312041f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://example.com//compile-pdf",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "latex_code",
+              "value": "={{ $json.final_latex }}"
+            },
+            {
+              "name": "filename",
+              "value": "Nexus_Matched_Threats"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1648,
+        16
+      ],
+      "id": "5011f883-ae14-4de7-b1b1-5cb1693ac3e2",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "fromEmail": "hhaivadi@lajvardtech.com",
+        "toEmail": "armankhalilieng@gmail.com, hhaivadi@lajvardtech.com, payamhaddad@gmail.com",
+        "subject": " گزارش هشدار: آسیب‌پذیری‌های بحرانی مرتبط با دارایی‌های سازمان🚨",
+        "emailFormat": "text",
+        "text": "=تیم محترم زیرساخت و امنیت،\n\nبا سلام،\nسیستم هوشمند پایش آسیب‌پذیری‌های سازمان (Project Nexus)، در بررسی ۲۴ ساعت گذشته خود، آسیب‌پذیری‌های جدیدی را شناسایی کرده است که دقیقاً با دارایی‌های داخلی سازمان مطابقت دارند.\n\nفایل PDF پیوست شامل موارد زیر است:\n- شرح آسیب‌پذیری‌ها (CVE)\n- تجهیزات و سرورهای تحت تأثیر\n- راهکارهای پیشنهادی جهت رفع (Mitigation & Patching)\n\nلطفاً در اسرع وقت نسبت به بررسی و اعمال وصله‌های امنیتی اقدام نمایید.\n\nبا تشکر،\nسامانه خودکار Project Nexus - مرکز عملیات امنیت (SOC)",
+        "options": {
+          "attachments": "=data"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1856,
+        16
+      ],
+      "id": "",
+      "name": "Send an Email",
+      "webhookId": "",
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": ""
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        16
+      ],
+      "id": "7cd0a636-d4e5-41af-a3d5-81415e5c7f7f",
+      "name": "No Operation, do nothing"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c3e3d30b-1e15-414d-b048-1c8179c0c0ca",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f308c54e343d2e1a1670e6bc0d8983b84dd2a6d0c2179b74a0d983cdb65688de"
+  },
+  "id": "tMUF4DaBzLdIDalz",
+  "tags": []
+}

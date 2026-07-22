@@ -1,14 +1,21 @@
-from fastapi import FastAPI, HTTPException, APIRouter
+from fastapi import FastAPI, HTTPException, APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
 import json
+import requests
+
 
 from db_manager import DatabaseManager
 from nvd_engine import NVDEngine
 from asset_mapper import AssetMapper
 from report_gen import ReportGenerator
 from tenable_engine import TenableEngine
+
+
+tenable = TenableEngine()
+router = APIRouter()
+
 
 app = FastAPI(
     title="Nexus Threat Intelligence API",
@@ -29,6 +36,14 @@ class AssetPayload(BaseModel):
     product: str
     version: str
     cpe_string: str
+
+    
+# The scan incoming request model
+class ScanRequest(BaseModel):
+    ip_address: str
+    plugin_id: int
+    webhook_url: str  # n8n will pass its "Resume URL" here
+
 
 # --- 1. VULNERABILITY ENDPOINTS ---
 
@@ -124,26 +139,62 @@ def compile_pdf(payload: LatexPayload):
 
 # --- Tenable Section ---
 
-tenable = TenableEngine()
-router = APIRouter()
-
 @app.get("/api/v1/tenable/plugins/{cve_id}")
 async def get_tenable_plugin(cve_id: str):
     """n8n uses this to see if Tenable can scan for a CVE"""
     plugins = tenable.search_plugin_by_cve(cve_id)
     return {"cve_id": cve_id, "plugins": plugins}
 
-@app.post("/api/v1/tenable/scan")
-async def trigger_targeted_scan(ip_address: str, plugin_id: int):
-    """n8n triggers this to actively scan a vulnerable asset"""
-    result = tenable.launch_targeted_scan(ip_address, plugin_id, scan_name=f"IP_{ip_address}")
-    return result
 
+# 2. The Background Task Function
+def poll_scan_and_notify(scan_result_id: int, webhook_url: str):
+    """
+    Runs in the background. Waits for Tenable to finish, then alerts n8n.
+    """
+    print(f"[*] Background Task started: Polling scan {scan_result_id}...")
+    
+    # This function from tenable_engine handles the while loop (waiting)
+    report = tenable.get_scan_report(scan_result_id) 
+    
+    print(f"[+] Scan {scan_result_id} complete. Sending webhook to n8n...")
+    try:
+        # Wake up n8n and send the vulnerability data!
+        requests.post(webhook_url, json=report)
+        print("[+] Successfully notified n8n.")
+    except Exception as e:
+        print(f"[!] Failed to notify n8n: {e}")
+
+# 3. The API Endpoint
+@app.post("/api/v1/tenable/scan")
+async def trigger_targeted_scan(request: ScanRequest, background_tasks: BackgroundTasks):
+    """
+    Instantly returns a success message to n8n, but processes the scan in the background.
+    """
+    # Trigger the scan in Tenable
+    result = tenable.launch_targeted_scan(
+        ip_address=request.ip_address, 
+        plugin_id=request.plugin_id, 
+        scan_name=f"Automated_CVE_Scan_{request.ip_address}"
+    )
+    
+    if result.get("status") == "Launched":
+        # Add the polling task to the FastAPI background thread
+        background_tasks.add_task(
+            poll_scan_and_notify, 
+            result["scan_result_id"], 
+            request.webhook_url
+        )
+        return {"message": "Scan launched successfully. n8n will be notified upon completion.", "status": "processing"}
+    else:
+        return {"error": "Failed to launch scan", "details": result}
+
+    
 @app.get("/api/v1/tenable/scan/report/{scan_result_id}")
 async def fetch_scan_report(scan_result_id: int):
     """n8n checks this endpoint to get the final scan results"""
     report = tenable.get_scan_report(scan_result_id)
     return report
+
 
 
 if __name__ == "__main__":

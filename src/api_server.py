@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
@@ -8,6 +8,7 @@ from db_manager import DatabaseManager
 from nvd_engine import NVDEngine
 from asset_mapper import AssetMapper
 from report_gen import ReportGenerator
+from tenable_engine import TenableEngine
 
 app = FastAPI(
     title="Nexus Threat Intelligence API",
@@ -120,6 +121,30 @@ def compile_pdf(payload: LatexPayload):
             return FileResponse(path=pdf_path, media_type='application/pdf', filename=f"{payload.filename}.pdf")
             
     raise HTTPException(status_code=500, detail="Failed to compile XeLaTeX PDF.")
+
+# --- Tenable Section ---
+
+tenable = TenableEngine()
+router = APIRouter()
+
+@app.get("/api/v1/tenable/plugins/{cve_id}")
+async def get_tenable_plugin(cve_id: str):
+    """n8n uses this to see if Tenable can scan for a CVE"""
+    plugins = tenable.search_plugin_by_cve(cve_id)
+    return {"cve_id": cve_id, "plugins": plugins}
+
+@app.post("/api/v1/tenable/scan")
+async def trigger_targeted_scan(ip_address: str, plugin_id: int):
+    """n8n triggers this to actively scan a vulnerable asset"""
+    result = tenable.launch_targeted_scan(ip_address, plugin_id, scan_name=f"IP_{ip_address}")
+    return result
+
+@app.get("/api/v1/tenable/scan/report/{scan_result_id}")
+async def fetch_scan_report(scan_result_id: int):
+    """n8n checks this endpoint to get the final scan results"""
+    report = tenable.get_scan_report(scan_result_id)
+    return report
+
 
 if __name__ == "__main__":
     import uvicorn

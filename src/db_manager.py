@@ -3,9 +3,12 @@ import json
 import psycopg2
 from psycopg2.extras import Json
 from dotenv import load_dotenv
+from pathlib import Path
+
 
 # Load variables from config/.env
-load_dotenv(dotenv_path="config/.env")
+env_path = Path(__file__).resolve().parent.parent / "config" / ".env"
+load_dotenv(dotenv_path=env_path)
 
 class DatabaseManager:
     def __init__(self):

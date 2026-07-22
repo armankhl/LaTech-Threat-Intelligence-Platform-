@@ -1,6 +1,9 @@
 import pandas as pd
 from db_manager import DatabaseManager
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="config/.env")
 
 def migrate_csv_to_db():
     db = DatabaseManager()
